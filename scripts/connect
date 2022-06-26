@@ -1,0 +1,106 @@
+#!/usr/bin/env sh
+
+set -e
+
+urlencode() {
+
+  local save_LC=$LC_COLLATE
+  LC_COLLATE=C
+
+  local i
+  local length="${#1}"
+
+  for i in $(seq 0 $((length-1))); do
+     local c=${1:$i:1}
+     case "$c" in
+        [a-zA-Z0-9/_.~-] ) printf '%s' "$c" ;;
+        * ) printf '%%%02X' "'$c" ;;
+     esac
+  done
+
+  LC_COLLATE=$save_LC
+}
+
+wait_file() {
+  local file="$1"; shift
+  local wait_seconds="${1:-10}"; shift # 10 seconds as default timeout
+
+  echo "=== log: waiting fo file: $file"
+
+  until test $((wait_seconds-=5)) -le 0 -o -f "$file" ; do
+    echo ">> $wait_seconds ... sleep 5"
+    sleep 5
+  done
+}
+
+SAML_USER=${SAML_USER:-testuser@example.org}
+SAML_PASS=${SAML_PASS:-testuser_password}
+
+OVPN_CONF=${OVPN_CONF:-./ovpn.conf}
+test -f ${OVPN_CONF} || { echo "=== err: openvpn config file (${OVPN_CONF}) doesn't exist" ; exit 1 ; }
+
+HOST=$(cat ${OVPN_CONF} | grep ^remote | head -n1 | cut -d" " -f2)
+PORT=$(cat ${OVPN_CONF} | grep ^remote | head -n1 | cut -d" " -f3)
+PROTO=$(cat ${OVPN_CONF} | grep ^proto | head -n1 | cut -d" " -f2)
+RAND=$(openssl rand -hex 12)
+SRV=$(dig a +short "${RAND}.${HOST}" | head -n1)
+
+sed \
+    -e '/^proto .*/d' \
+    -e '/^remote .*/d' \
+    -e '/^remote-random-hostname.*/d' \
+    -e '/^resolv-retry infinite.*/d' \
+    -e '/^auth-user-pass.*/d' \
+    -e '/^auth-federate.*/d' \
+    -e '/^auth-retry interact.*/d' \
+    -e '/^nobind.*/a persist-key\npersist-tun' \
+    ${OVPN_CONF} > ${OVPN_CONF}-${SRV}
+
+echo "=== log: getting init SAML request..."
+OVPN_OUT=$(openvpn --config "${OVPN_CONF}-${SRV}" \
+  --proto "$PROTO" --remote "${SRV}" "${PORT}" \
+  --auth-user-pass <( printf "%s\n%s\n" "N/A" "ACS::35001" ) 2>&1 | grep AUTH_FAILED,CRV1)
+
+URL=$(echo "$OVPN_OUT" | grep -Eo 'https://.+')
+test -n ${URL} || { echo "=== err: returned from init openvpn connect SAML request URL is empty" ; exit 1 ; }
+
+SID=$(echo "$OVPN_OUT" | awk -F : '{print $7}')
+test -n ${SID} || { echo "=== err: returned from init openvpn connect SID is empty" ; exit 1 ; }
+
+# Delete stale SAML files
+RESP_FILE=${RESP_FILE:-./resp.txt}
+rm -f ${RESP_FILE} ${RESP_FILE}.cred
+
+rm -fr ${HOME}/.saml2aws
+rm -fr saml-response.b64
+
+S2A_LOG=${S2A_LOG:-./saml2aws.log}
+rm -f ${S2A_LOG}
+
+echo "=== log: getting SAML response..."
+
+echo "=== log: saml2aws configure" >> ${S2A_LOG} 2>&1
+saml2aws configure --skip-prompt --idp-account='clientvpn-jumpcloud' --idp-provider='JumpCloud' --mfa='Auto' --url=${URL} >> ${S2A_LOG} 2>&1
+echo "=== log: saml2aws login" >> ${S2A_LOG} 2>&1
+saml2aws login -a clientvpn-jumpcloud --username=${SAML_USER} --password=${SAML_PASS} --cache-saml --cache-file=saml-response.b64 --aws-urn='urn:amazon:webservices:clientvpn' --skip-prompt >> ${S2A_LOG} 2>&1 || true
+
+! grep -q -i "Response did not contain a valid SAML assertion" ${S2A_LOG} || { 
+  echo "=== err: SAML authentication failed, please check your username and/or password"
+  exit 1
+}
+
+test -f saml-response.b64 || { echo "=== err: saml2aws didn't create cache-file ('saml-response.b64')" ; exit 1 ; }
+urlencode $(cat saml-response.b64) > saml-response.urlencoded
+cp saml-response.urlencoded ${RESP_FILE}
+
+wait_file ${RESP_FILE} 300
+test -f ${RESP_FILE} || { echo "=== err: getting SAML response file time out"; exit 1 ; }
+
+printf "%s\n%s\n" "N/A" "CRV1::${SID}::$(cat ${RESP_FILE})" > ${RESP_FILE}.cred
+chmod 600 ${RESP_FILE}.cred
+
+echo "=== log: running OpenVPN"
+sh -c "openvpn --config ${OVPN_CONF}-${SRV} --inactive 3600 \
+  --proto $PROTO --remote ${SRV} ${PORT} \
+  --script-security 2 --route-up '/usr/bin/env rm -f ${RESP_FILE} ${RESP_FILE}.cred' \
+  --auth-user-pass ${RESP_FILE}.cred"
