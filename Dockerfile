@@ -25,9 +25,8 @@ RUN apt-get update -y \
  && tar -xzvf saml2aws_${SAML2AWS_VERSION}_linux_amd64.tar.gz -C /usr/local/bin \
  && chmod u+x /usr/local/bin/saml2aws
 
-# main stage
+
 FROM alpine:latest
-ARG EXPOSE_PORT=35001
 
 ARG OVPN_CONF=./ovpn.conf
 ENV OVPN_CONF=$OVPN_CONF
