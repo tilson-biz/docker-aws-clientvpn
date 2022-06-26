@@ -1,4 +1,4 @@
-## OpenVPN Client to authenticate with SAML 2.0 to AWS Client VPN
+## OpenVPN Client to authenticate to AWS ClientVPN via SAML
 
 ### Note ###
 
