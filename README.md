@@ -2,7 +2,7 @@
 
 ### About ###
 
-* [Docker image](https://hub.docker.com/repository/docker/tilsonbiz/aws-clientvpn) of [OpenVPN client](https://openvpn.net) to connect to [AWS Client VPN endpoint](https://aws.amazon.com/vpn/client-vpn/) via SAML 2.0 protocol using various IdPs for authentication and authorization in unattended way
+* [Docker image](https://hub.docker.com/r/tilsonbiz/aws-clientvpn) of [OpenVPN client](https://openvpn.net) to connect to [AWS Client VPN endpoint](https://aws.amazon.com/vpn/client-vpn/) via SAML 2.0 protocol using various IdPs for authentication and authorization in unattended way
 * To authenticate to IdP via SAML the corresponding `username` and `password` to be provided to the running container as command line parameters (or environment variables)
 * OpenVPN client configuration file for `AWS Client VPN endpoint` to be provided to the running container as mount volume
 
