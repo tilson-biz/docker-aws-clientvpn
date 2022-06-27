@@ -10,7 +10,7 @@
 
 * The main idea is based on [samm-git/aws-vpn-client](https://github.com/samm-git/aws-vpn-client), with respect to [samm-git](https://github.com/samm-git)
 * [Versent/saml2aws](https://github.com/Versent/saml2aws) is used to get SAML Asseesment response, with respect to [Versent](https://github.com/Versent)
-* Creation of Docker image for OpenVPN client is based on [dperson/openvpn-client](https://github.com/dperson/openvpn-client), with respect to [dperson](https://github.com/dperson)
+* Docker image for OpenVPN client is based on [dperson/openvpn-client](https://github.com/dperson/openvpn-client), with respect to [dperson](https://github.com/dperson)
 * For [URL Encoding](https://gist.github.com/cdown/1163649) thanks to [cdown](https://github.com/cdown)
 * SAML dissection was performed in [mtilson/clientvpn-with-saml](https://github.com/mtilson/clientvpn-with-saml)
 * `aws-cli/v1` is available as [Alpine package](https://pkgs.alpinelinux.org/package/edge/community/x86/aws-cli)
