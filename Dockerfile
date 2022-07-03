@@ -20,13 +20,18 @@ RUN apt-get update -y \
  && make LIBS="-all-static" \
  && make install \
  && strip /usr/local/sbin/openvpn \
+ && cd .. \
+ && mkdir -p etc/openvpn \
+ && cp openvpn-${OVPN_VER}/contrib/pull-resolv-conf/client.* etc/openvpn/ \
+ && sed -i -e 's#cp /etc/resolv.conf.ovpnsave /etc/resolv.conf.*#cat /etc/resolv.conf.ovpnsave > /etc/resolv.conf#' etc/openvpn/client.down \
+ && chmod +x etc/openvpn/client.* \
  && SAML2AWS_VERSION=$(curl -Ls https://api.github.com/repos/Versent/saml2aws/releases/latest | grep 'tag_name' | cut -d"\"" -f4 | sed -e 's/v//') \
  && curl -LO https://github.com/Versent/saml2aws/releases/download/v${SAML2AWS_VERSION}/saml2aws_${SAML2AWS_VERSION}_linux_amd64.tar.gz \
  && tar -xzvf saml2aws_${SAML2AWS_VERSION}_linux_amd64.tar.gz -C /usr/local/bin \
  && chmod u+x /usr/local/bin/saml2aws
 
 
-FROM alpine:latest
+FROM alpine:3.16.0
 
 ARG OVPN_CONF=./ovpn.conf
 ENV OVPN_CONF=$OVPN_CONF
@@ -34,12 +39,14 @@ ENV OVPN_CONF=$OVPN_CONF
 ARG RESP_FILE=./resp.txt
 ENV RESP_FILE=$RESP_FILE
 
-RUN \
-    apk add --no-cache --update aws-cli bash bind-tools ca-certificates curl openssl tzdata && \
-    echo "alias ll='ls -la'" >> ~/.bashrc && \
-    rm -rf /var/cache/apk/*
+WORKDIR /app
+RUN apk add --no-cache --update aws-cli bash bind-tools ca-certificates curl openssl shadow shadow-login tini tzdata \
+ && echo "alias ll='ls -la'" >> ~/.bashrc \
+ && addgroup -S vpn \
+ && rm -rf /var/cache/apk/* /tmp/*
 
 COPY --from=build /usr/local/sbin/openvpn /usr/local/sbin/openvpn
+COPY --from=build /app/etc/openvpn /etc/openvpn
 RUN echo -e "openvpn version:\n" && openvpn --version
 
 COPY --from=build /usr/local/bin/saml2aws /usr/local/bin/saml2aws
@@ -47,8 +54,12 @@ RUN echo -e "saml2aws version:\n" && saml2aws --version
 
 RUN echo -e "aws-cli version:\n" && aws --version
 
-WORKDIR /app
-COPY /scripts/connect ./
-COPY /scripts/help ./
+COPY /scripts ./
 
-CMD ["/bin/bash", "-c", "/app/help"]
+HEALTHCHECK \
+  --interval=60s \
+  --timeout=15s \
+  --start-period=120s \
+  CMD curl -LSs 'https://api.ipify.org'
+
+ENTRYPOINT ["/sbin/tini", "--", "/app/connect"]

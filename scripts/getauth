@@ -1,0 +1,83 @@
+#!/usr/bin/env sh
+
+# /app/getauth ${IP} ${PROTO} ${PORT} ${SAML_USER} ${SAML_PASS} ${OVPN_CONF} ${RESP_FILE}
+# set -e -o nounset
+
+test "${script_context:-}" = "init" && { 
+  echo "=== [$0] log: down script: context init: skipping"
+  exit 0
+}
+
+test "${script_context:-}" = "restart" && { 
+  echo "=== [$0] log: down script: context restart: processing"
+  export PATH=/usr/local/sbin:/usr/local/bin:$PATH
+}
+
+echo "=== [$0] log: getting SAML request..."
+
+urlencode() {
+  local i
+  local length="${#1}"
+
+  for i in $(seq 0 $((length-1))); do
+     local c=${1:$i:1}
+     case "$c" in
+        [a-zA-Z0-9/_.~-] ) LC_COLLATE=C printf '%s' "$c" ;;
+        * ) LC_COLLATE=C printf '%%%02X' "'$c" ;;
+     esac
+  done
+}
+
+IP=${1}
+PROTO=${2}
+PORT=${3}
+SAML_USER=${4}
+SAML_PASS=${5}
+OVPN_CONF=${6}
+RESP_FILE=${7}
+
+test -n ${IP}        || { echo "=== [$0] err: passed var for IP        is empty" ; exit 1 ; }
+test -n ${PROTO}     || { echo "=== [$0] err: passed var for PROTO     is empty" ; exit 1 ; }
+test -n ${PORT}      || { echo "=== [$0] err: passed var for PORT      is empty" ; exit 1 ; }
+test -n ${SAML_USER} || { echo "=== [$0] err: passed var for SAML_USER is empty" ; exit 1 ; }
+test -n ${SAML_PASS} || { echo "=== [$0] err: passed var for SAML_PASS is empty" ; exit 1 ; }
+test -n ${OVPN_CONF} || { echo "=== [$0] err: passed var for OVPN_CONF is empty" ; exit 1 ; }
+test -n ${RESP_FILE} || { echo "=== [$0] err: passed var for RESP_FILE is empty" ; exit 1 ; }
+
+rm -fr ${RESP_FILE} ${RESP_FILE}.cred ${RESP_FILE}.sid ${RESP_FILE}.s2alog ${RESP_FILE}.b64 ${RESP_FILE}.urlencoded
+
+OVPN_OUT=$(openvpn --config "${OVPN_CONF}-${IP}" --proto "$PROTO" --remote "${IP}" "${PORT}" \
+  --auth-user-pass <( printf "%s\n%s\n" "N/A" "ACS::35001" ) 2>&1 | grep AUTH_FAILED,CRV1)
+
+URL=$(echo "$OVPN_OUT" | grep -Eo 'https://.+')
+test -n ${URL} || { echo "=== [$0] err: returned from init openvpn connect SAML request URL is empty" ; exit 1 ; }
+
+SID=$(echo "$OVPN_OUT" | awk -F : '{print $7}')
+test -n ${SID} || { echo "=== [$0] err: returned from init openvpn connect SID is empty" ; exit 1 ; }
+printf "%s\n" "${SID}"> ${RESP_FILE}.sid
+
+
+echo "=== [$0] log: getting SAML response..."
+rm -fr ${HOME}/.saml2aws saml-response.b64
+
+test -s /etc/resolv.conf.ovpnsave && cat /etc/resolv.conf.ovpnsave > /etc/resolv.conf
+
+echo "=== [$0] log: saml2aws configure" >> ${RESP_FILE}.s2alog 2>&1
+saml2aws configure --skip-prompt --idp-account='clientvpn-jumpcloud' --idp-provider='JumpCloud' --mfa='Auto' --url=${URL} >> ${RESP_FILE}.s2alog 2>&1
+echo "=== [$0] log: saml2aws login" >> ${RESP_FILE}.s2alog 2>&1
+saml2aws login -a clientvpn-jumpcloud --username=${SAML_USER} --password=${SAML_PASS} --cache-saml --cache-file=saml-response.b64 --aws-urn='urn:amazon:webservices:clientvpn' --skip-prompt >> ${RESP_FILE}.s2alog 2>&1 || true
+
+! grep -q -i "Response did not contain a valid SAML assertion" ${RESP_FILE}.s2alog || {
+  echo "=== [$0] err: SAML authentication failed, please check your username and/or password" ; exit 1 ;
+}
+
+! grep -q -i "Error authenticating to IdP" ${RESP_FILE}.s2alog || {
+  echo "=== [$0] err: SAML authentication failed, error authenticating to IdP" ; exit 1 ;
+}
+
+test -f saml-response.b64 || { echo "=== [$0] err: saml2aws didn't create cache-file ('saml-response.b64')" ; exit 1 ; }
+mv saml-response.b64 ${RESP_FILE}.b64
+
+urlencode $(cat ${RESP_FILE}.b64) > ${RESP_FILE}.urlencoded
+printf "%s\n%s\n" "N/A" "CRV1::${SID}::$(cat ${RESP_FILE}.urlencoded)" > ${RESP_FILE}.cred
+chmod 600 ${RESP_FILE}.cred
