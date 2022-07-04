@@ -42,5 +42,5 @@ user@docker$ docker run \
   --name clientvpn \
   tilsonbiz/aws-clientvpn
 
-user@docker$ docker run -d -it --net=container:vpn other/docker-image:v1
+user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
 ```
