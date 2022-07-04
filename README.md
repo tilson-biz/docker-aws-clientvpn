@@ -48,3 +48,4 @@ user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
 
 * Pass arguments to `getauth` script by creating a file to `source` it within script - this will avoid printing `useername`, `password` in container log
 * Add GitHub Action pipeline to build and publish dockeer image (by tagging integration branch) to ghcr.io (and docker hub)
+* `aws cli` is not used here, it is probably possible to patch `saml2aws` to build image without `aws-cli` alpne package
