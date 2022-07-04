@@ -25,17 +25,22 @@
 
 ### Usage ###
 
+* Suppose we would like to run docker container from image `other/docker-image:v1` which should have access to some external resources/services via connection to `AWS Client VPN endpoint` for which we have downloaded and saved configuration file `~/Downloads/downloaded-client-config.ovpn` and set up `username` and `password` in an **Identity provider** integrated with the endpoint via SAML
+
 ``` bash
 user@docker$ export SAML_USER="username"
 user@docker$ export SAML_PASS="password"
+user@docker$ cp ~/Downloads/downloaded-client-config.ovpn ./
 user@docker$ docker run \
   -d \
   --rm \
   -e SAML_USER=$SAML_USER \
   -e SAML_PASS=$SAML_PASS \
-  -v"$(pwd)/aws-client-vpn.ovpn":"/app/ovpn.conf" \
+  -v"$(pwd)/downloaded-client-config.ovpn":"/app/ovpn.conf" \
   --cap-add=NET_ADMIN \
   --device=/dev/net/tun \
   --name clientvpn \
   tilsonbiz/aws-clientvpn
+
+user@docker$ docker run -d -it --net=container:vpn other/docker-image:v1
 ```
