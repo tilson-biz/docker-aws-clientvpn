@@ -22,7 +22,6 @@
 * **`AWS Client VPN endpoint`** to be created and configured to *Use user-based authentication* -> *Federated authentication* and choosing ARN of the configured **AWS IAM SAML identity provider** as *SAML provider ARN*
 * **Authorization rules** to be added to the created **`AWS Client VPN endpoint`** with *Grant access to* -> *Allow access to users in a specific access group* with specifying *Access group ID* as the name of the **registered group** from the **Choosen identity provider**
 
-
 ### Usage ###
 
 * Suppose we would like to run docker container from image `other/docker-image:v1` which should have access to some external resources/services via connection to `AWS Client VPN endpoint` for which we have downloaded and saved configuration file `~/Downloads/downloaded-client-config.ovpn` and set up `username` and `password` in an **Identity provider** integrated with the endpoint via SAML
@@ -44,3 +43,7 @@ user@docker$ docker run \
 
 user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
 ```
+
+### TODO ###
+
+* Pass arguments to `getauth` script by creating a file to `source` it within script - this will avoid printing `useername`, `password` in container log
