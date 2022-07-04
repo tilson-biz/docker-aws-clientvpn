@@ -47,3 +47,4 @@ user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
 ### TODO ###
 
 * Pass arguments to `getauth` script by creating a file to `source` it within script - this will avoid printing `useername`, `password` in container log
+* Add GitHub Action pipeline to build and publish dockeer image (by tagging integration branch) to ghcr.io (and docker hub)
