@@ -48,7 +48,7 @@ user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
 
 #### `docker compose` ####
 
-##### Procedure ######
+##### Procedure #####
 
 > **NOTE**: There should be compose file for an **existing_service** which needs to access some external resources/services via connection to `AWS Client VPN endpoint`
 
