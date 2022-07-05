@@ -54,6 +54,7 @@ RUN echo -e "saml2aws version:\n" && saml2aws --version
 
 RUN echo -e "aws-cli version:\n" && aws --version
 
+COPY README.md ./
 COPY /scripts ./
 
 HEALTHCHECK \
