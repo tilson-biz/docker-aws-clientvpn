@@ -26,6 +26,8 @@
 
 * Suppose we would like to run docker container from image `other/docker-image:v1` which should have access to some external resources/services via connection to `AWS Client VPN endpoint` for which we have downloaded and saved configuration file `~/Downloads/downloaded-client-config.ovpn` and set up `username` and `password` in an **Identity provider** integrated with the endpoint via SAML
 
+#### Pure `docker` ####
+
 ``` bash
 user@docker$ export SAML_USER="username"
 user@docker$ export SAML_PASS="password"
@@ -42,6 +44,109 @@ user@docker$ docker run \
   tilsonbiz/aws-clientvpn
 
 user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
+```
+
+#### `docker compose` ####
+
+##### Procedure ######
+
+> **NOTE**: There should be compose file for an **existing_service** which needs to access some external resources/services via connection to `AWS Client VPN endpoint`
+
+* Create a working directory (e.g. `vpn`)
+* Place variables for SAML `username`/`password` into `.env` file in the working directory
+* Copy **OpenVPN client configuration file for `AWS Client VPN endpoint`** into the working directory
+* Copy compose file for the **existing_service** into the working directory as either `compose.yaml` or `docker-compose.yaml`
+* Add the following service (e.g. `vpn`) in the compose file
+```
+services:
+  vpn:
+    image: tilsonbiz/aws-clientvpn
+    cap_add:
+      - net_admin
+    volumes:
+      - /dev/net:/dev/net:z
+      - ./downloaded-client-config.ovpn:/app/ovpn.conf
+```
+* Add the following changes to the to the **existing_service** in the compose file
+```
+services:
+  existing_service:
+    depends_on:
+      - vpn
+    network_mode: "service:vpn"
+```
+* Use `docker compose run` command to run containers
+
+##### Example #####
+
+* Create and change to the working directory
+
+```bash
+user@docker$ mkdir vpn
+user@docker$ cd vpn
+```
+
+* Place variables for SAML `username`/`password` into `.env` file in the working directory
+
+```bash
+user@docker$ cat > /.env << _EOF
+SAML_USER="username"
+SAML_PASS="password"
+_EOF
+```
+
+* Copy **OpenVPN client configuration file for `AWS Client VPN endpoint`** into the working directory
+
+```bash
+user@docker$ cp ~/Downloads/downloaded-client-config.ovpn ./
+```
+
+* Copy compose file for the **existing_service** into the working directory as either `compose.yaml` or `docker-compose.yaml` and make corresponding changes
+
+```bash
+user@docker$ cat docker-compose.yaml
+version: '3.4'
+
+services:
+  vpn:
+    image: tilsonbiz/aws-clientvpn
+    cap_add:
+      - net_admin
+    volumes:
+      - /dev/net:/dev/net:z
+      - ./downloaded-client-config.ovpn:/app/ovpn.conf
+    environment:
+      TZ: 'UTC'
+    networks:
+      - default
+    tmpfs:
+      - /run
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - label:disable
+    stdin_open: true
+    tty: true
+
+  existing_service:
+    image: other/docker-image
+    depends_on:
+      - vpn
+    network_mode: "service:vpn"
+    environment:
+      TZ: 'UTC'
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+ 
+networks:
+  default:
+```
+
+* Run containers
+
+```bash
+docker compose run -d existing_service
 ```
 
 ### TODO ###
