@@ -5,20 +5,26 @@ echo "## Versions:"
 ! type saml2aws >/dev/null 2>&1 || { echo -n "* saml2aws: " ; saml2aws --version | head -1 ; }
 ! type aws >/dev/null 2>&1 || { echo -n "* aws-cli: " ; aws --version | head -1 ; }
 
-cat << _EOF
+cat << '_EOF'
+### Usage ###
 
-## Help:
-* This image can be used to provide unattended connection to AWS ClientVPN within docker container using SAML authentication
-* To run container use the following command and parameters:
-docker run \
-  --rm \
+* Suppose we would like to run docker container from image `other/docker-image:v1` which should have access to some external resources/services via connection to `AWS Client VPN endpoint` for which we have downloaded and saved configuration file `~/Downloads/downloaded-client-config.ovpn` and set up `username` and `password` in an **Identity provider** integrated with the endpoint via SAML
+
+``` bash
+user@docker$ export SAML_USER="username"
+user@docker$ export SAML_PASS="password"
+user@docker$ cp ~/Downloads/downloaded-client-config.ovpn ./
+user@docker$ docker run \
   -d \
-  -e SAML_USER='username' \
-  -e SAML_PASS='password' \
-  -e OVPN_CONF=/app/aws-clientvpn.ovpn \
-  -v"$(pwd)/your-aws-clientvpn-config-file":"/app/aws-clientvpn.ovpn" \
+  --rm \
+  -e SAML_USER=$SAML_USER \
+  -e SAML_PASS=$SAML_PASS \
+  -v"$(pwd)/downloaded-client-config.ovpn":"/app/ovpn.conf" \
   --cap-add=NET_ADMIN \
   --device=/dev/net/tun \
-  --name clientvpn  \
-  tilsonbiz/aws-clientvpn /app/connect
+  --name clientvpn \
+  tilsonbiz/aws-clientvpn
+
+user@docker$ docker run -d -it --net=container:clientvpn other/docker-image:v1
+```
 _EOF
